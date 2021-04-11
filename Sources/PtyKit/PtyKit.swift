@@ -2,7 +2,7 @@ import Foundation
 
 import Cstdlib
 
-enum PtyError: Error {
+public enum PtyError: Error {
     case OpenFailed
     case GrantFailed
     case UnlockFailed
@@ -10,7 +10,7 @@ enum PtyError: Error {
 }
 
 extension FileHandle {
-    static func openPty() throws -> FileHandle {
+    public static func openPty() throws -> FileHandle {
         let hostDescriptor = Cstdlib.posix_openpt(O_RDWR)
         guard -1 != hostDescriptor else {
             throw PtyError.OpenFailed
@@ -19,7 +19,7 @@ extension FileHandle {
         return FileHandle(fileDescriptor: hostDescriptor)
     }
 
-    func getChildPty() throws -> FileHandle {
+    public func getChildPty() throws -> FileHandle {
         let hostDescriptor = self.fileDescriptor
         guard 0 == Cstdlib.grantpt(hostDescriptor) else {
             throw PtyError.GrantFailed
