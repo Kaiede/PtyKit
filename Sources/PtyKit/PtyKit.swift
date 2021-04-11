@@ -11,7 +11,7 @@ public enum PtyError: Error {
 
 extension FileHandle {
     public static func openPty() throws -> FileHandle {
-        let hostDescriptor = Cstdlib.posix_openpt(O_RDWR)
+        let hostDescriptor = Cstdlib.posix_openpt(Cstdlib.O_RDWR)
         guard -1 != hostDescriptor else {
             throw PtyError.OpenFailed
         }
