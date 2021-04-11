@@ -1,0 +1,5 @@
+module Cstdlib [system] {
+    header "./BridgingHeader.h"
+    link "c"
+    export *
+}
