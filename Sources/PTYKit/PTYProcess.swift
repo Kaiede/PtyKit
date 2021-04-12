@@ -134,7 +134,7 @@ public class PTYProcess {
         
         let timeoutDate = Date().addingTimeInterval(timeout)
         while result == .noMatch && Date() < timeoutDate && process.isRunning {
-            RunLoop.current.run(mode: .default, before: timeoutDate)
+            let _ = RunLoop.current.run(mode: .default, before: timeoutDate)
         }
 
         cleanupBackgroundReading()
