@@ -67,8 +67,9 @@ public class PTYProcess {
         NotificationCenter.default.addObserver(
             forName: .NSFileHandleDataAvailable,
             object: outputPipe.fileHandleForReading,
-            queue: nil) { notification in
+            queue: nil) { [self] notification in
             
+            logger.trace("Received Notification")
             self.didReceiveReadNotification(notification: notification)
         }
         
@@ -152,17 +153,19 @@ public class PTYProcess {
     }
     
     private func didReceiveReadNotification(notification: Notification) {
+        logger.trace("Read Notification")
         guard let data = notification.userInfo?[NSFileHandleNotificationDataItem] as? Data else {
             CFRunLoopStop(RunLoop.current.getCFRunLoop())
             return
         }
         
-        guard let string = String(data: data, encoding: .utf8) else {
+        guard let content = String(data: data, encoding: .utf8) else {
             CFRunLoopStop(RunLoop.current.getCFRunLoop())
             return
         }
         
-        let action = self.currentExpect?(string) ?? .exit
+        logger.trace("Processing: \(content)")
+        let action = self.currentExpect?(content) ?? .exit
         switch action {
         case .exit:
             CFRunLoopStop(RunLoop.current.getCFRunLoop())
