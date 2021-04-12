@@ -78,6 +78,10 @@ public class PTYProcess {
         }
     }
     
+    public func waitUntilExit() {
+        process.waitUntilExit()
+    }
+    
     public func sendLine(_ content: String) throws {
         try send("\(content)\n")
     }
