@@ -5,17 +5,24 @@ import PackageDescription
 
 let package = Package(
     name: "PTYKit",
+    platforms: [
+        .macOS(.v10_13)
+    ],
     products: [
         .library(
             name: "PTYKit",
             targets: ["PTYKit"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0")
     ],
     targets: [
         .target(
             name: "PTYKit",
-            dependencies: ["CPTYKit"]),
+            dependencies: [
+                "CPTYKit",
+                .product(name: "Logging", package: "swift-log")
+            ]),
         .target(name: "CPTYKit")
     ]
 )
