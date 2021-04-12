@@ -19,6 +19,7 @@
  SOFTWARE.)
 */
 
+import CoreFoundation
 import Foundation
 import Logging
 
