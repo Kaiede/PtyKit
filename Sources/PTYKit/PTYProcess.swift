@@ -32,8 +32,14 @@ public class PTYProcess {
         case exit
     }
     
+    public enum ExpectResult: Equatable {
+        case noMatch
+        case match(String)
+    }
+    
     let logger: Logger
     let process: Process
+    var observer: NSObjectProtocol?
     
     // PTY File Handles
     let hostHandle: FileHandle
@@ -42,6 +48,7 @@ public class PTYProcess {
     let outputPipe: Pipe
     
     var currentExpect: ((String) -> ExpectAction)?
+    var currentRunLoop: CFRunLoop?
     
     public init(_ launchExecutable: URL, arguments: [String]) throws {
         logger = Logger(label: "PTYProcess:\(launchExecutable.lastPathComponent)")
@@ -64,18 +71,8 @@ public class PTYProcess {
         logger.trace("Launching")
         process.launch()
         
-        NotificationCenter.default.addObserver(
-            forName: .NSFileHandleDataAvailable,
-            object: outputPipe.fileHandleForReading,
-            queue: nil) { [self] notification in
-            
-            logger.trace("Received Notification")
-            self.didReceiveReadNotification(notification: notification)
-        }
-        
         process.terminationHandler = { _ in
             self.logger.trace("Terminated")
-            CFRunLoopStop(RunLoop.current.getCFRunLoop())
         }
     }
     
@@ -110,31 +107,36 @@ public class PTYProcess {
         try hostHandle.write(contentsOf: data)
     }
     
-    public func expect(_ expressions: String, timeout: TimeInterval = .infinity) -> String? {
+    public func expect(_ expressions: String, timeout: TimeInterval = .infinity) -> ExpectResult {
         return expect([expressions], timeout: timeout)
     }
     
-    public func expect(_ expressions: [String], timeout: TimeInterval = .infinity) -> String? {
+    public func expect(_ expressions: [String], timeout: TimeInterval = .infinity) -> ExpectResult {
         guard process.isRunning else {
-            return nil
+            return .noMatch
         }
         
         logger.trace("Expecting: \(expressions)")
         
-        var result: String? = nil
-        
-        currentExpect = { content in
+        // Run the loop until we time out or we found a result
+        logger.trace("Starting RunLoop")
+        var result: ExpectResult = .noMatch
+        startBackgroundReading { content in
             // Find matches and break if we find one, otherwise keep listening
-            result = self.findMatches(content: content, expressions: expressions)
-            if result != nil {
+            if let foundMatch = self.findMatches(content: content, expressions: expressions) {
+                result = .match(foundMatch)
                 return .exit
             }
             
             return .keepListening
         }
         
-        // Run the loop until we time out or we found a result
-        RunLoop.current.run(until: Date().addingTimeInterval(timeout))
+        let timeoutDate = Date().addingTimeInterval(timeout)
+        while result == .noMatch && Date() < timeoutDate && process.isRunning {
+            RunLoop.current.run(mode: .default, before: timeoutDate)
+        }
+
+        cleanupBackgroundReading()
         
         currentExpect = nil
         return result
@@ -145,34 +147,60 @@ public class PTYProcess {
         for expression in expressions {
             let range = content.range(of: expression, options: [.regularExpression, .caseInsensitive])
             if range != nil {
+                logger.trace("Match Found")
                 return expression
             }
         }
-        
+
+        logger.trace("No Match")
         return nil
     }
     
-    private func didReceiveReadNotification(notification: Notification) {
-        logger.trace("Read Notification")
-        guard let data = notification.userInfo?[NSFileHandleNotificationDataItem] as? Data else {
-            CFRunLoopStop(RunLoop.current.getCFRunLoop())
+    private func startBackgroundReading(expect: @escaping (String) -> ExpectAction) {
+        DispatchQueue.main.async { [self] in
+            logger.trace("Background Reading Start")
+            self.currentRunLoop = CFRunLoopGetCurrent()
+            self.currentExpect = expect
+            outputPipe.fileHandleForReading.readabilityHandler = didReceiveData
+        }
+    }
+    
+    private func cleanupBackgroundReading() {
+        logger.trace("Background Reading Cleanup")
+        outputPipe.fileHandleForReading.readabilityHandler = nil
+        currentExpect = nil
+    }
+    
+    private func stopBackgroundReading() {
+        DispatchQueue.main.async {
+            self.logger.trace("Background Reading Stop")
+            if let loop = self.currentRunLoop {
+                CFRunLoopStop(loop)
+            }
+        }
+    }
+    
+    private func didReceiveData(fileHandle: FileHandle) {
+        let data = fileHandle.availableData
+        
+        // Handle EOF State
+        guard data.count > 0 else {
+            stopBackgroundReading()
             return
         }
         
         guard let content = String(data: data, encoding: .utf8) else {
-            CFRunLoopStop(RunLoop.current.getCFRunLoop())
+            stopBackgroundReading()
             return
         }
         
-        logger.trace("Processing: \(content)")
         let action = self.currentExpect?(content) ?? .exit
         switch action {
         case .exit:
-            CFRunLoopStop(RunLoop.current.getCFRunLoop())
-
+            stopBackgroundReading()
+            break
         case .keepListening:
-            outputPipe.fileHandleForReading.readInBackgroundAndNotify()
-
+            break
         }
     }
 }
