@@ -70,7 +70,7 @@ public class PTYProcess {
         process.standardOutput = outputPipe
         
         logger.trace("Launching")
-        process.launch()
+        try process.run()
         
         process.terminationHandler = { _ in
             self.logger.trace("Terminated")
