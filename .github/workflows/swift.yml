@@ -23,9 +23,7 @@ jobs:
         swift --version
         swift package show-dependencies
     - name: Build
-      run: swift build --build-tests
-    - name: Test
-      run: swift test
+      run: swift build
 
   macOSBuild:
     name: macOS - Xcode ${{ matrix.xcode-version }}
@@ -46,9 +44,7 @@ jobs:
           swift --version
           swift package show-dependencies
       - name: Build
-        run: swift build --build-tests
-      - name: Test
-        run: swift test
+        run: swift build
       - name: Swiftlint
         run: |
           brew install swiftlint
