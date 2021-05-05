@@ -26,6 +26,8 @@ jobs:
       run: swift build
     - name: SwiftLint
       uses: norio-nomura/action-swiftlint@3.2.1
+      env:
+          WORKING_DIRECTORY: Sources
 
   macOSBuild:
     name: macOS - Xcode ${{ matrix.xcode-version }}
@@ -47,5 +49,3 @@ jobs:
           swift package show-dependencies
       - name: Build
         run: swift build
-      - name: SwiftLint
-        run: swiftlint
