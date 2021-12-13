@@ -50,7 +50,11 @@ public class PTYProcess {
     
     var currentExpect: ((String) -> ExpectAction)?
     var currentRunLoop: CFRunLoop?
-    
+
+    public var isRunning: Bool {
+        self.process.isRunning
+    }
+
     public init(_ launchExecutable: URL, arguments: [String]) throws {
         logger = Logger(label: "PTYProcess:\(launchExecutable.lastPathComponent)")
         process = Process()
