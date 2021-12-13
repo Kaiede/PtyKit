@@ -77,6 +77,10 @@ public class PTYProcess {
         }
     }
     
+    public func terminate() {
+        process.terminate()
+    }
+    
     public func waitUntilExit() {
         process.waitUntilExit()
     }
