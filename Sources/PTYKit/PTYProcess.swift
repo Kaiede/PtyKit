@@ -77,7 +77,7 @@ public class PTYProcess {
         try process.run()
         
         process.terminationHandler = { _ in
-            self.logger.trace("Terminated")
+            self.logger.info("Process Terminated: \(self.process.executableURL?.path ?? "<<UNKNOWN>>")")
         }
     }
     
@@ -113,9 +113,35 @@ public class PTYProcess {
     
     @available(OSX 10.15.4, *)
     public func send<Data: DataProtocol>(contentsOf data: Data) throws {
+        logger.trace("Sending Data: \(data.count) bytes")
         try hostHandle.write(contentsOf: data)
     }
-    
+
+    public func expect(_ expressions: String, timeout: TimeInterval = .infinity) async -> ExpectResult {
+        return await expect([expressions], timeout: timeout)
+    }
+
+    public func expect(_ expressions: [String], timeout: TimeInterval = .infinity) async -> ExpectResult {
+        guard process.isRunning else {
+            return .noMatch
+        }
+
+        logger.debug("Expecting: \(expressions)")
+
+        for await content in pipeEvents(timeout: timeout) {
+            logger.trace("Content Read: \(content)")
+            if let foundMatch = self.findMatches(content: content, expressions: expressions) {
+                logger.debug("Match Found: \(content)")
+                return .match(foundMatch)
+            }
+            logger.trace("Content Has No Matches")
+        }
+
+        // If we existed the loop, then we timed out without a match.
+        logger.debug("No Matches Found, Timed Out")
+        return .noMatch
+    }
+
     public func expect(_ expressions: String, timeout: TimeInterval = .infinity) -> ExpectResult {
         return expect([expressions], timeout: timeout)
     }
@@ -125,8 +151,7 @@ public class PTYProcess {
             return .noMatch
         }
         
-        logger.trace("Expecting: \(expressions)")
-        
+
         // Run the loop until we time out or we found a result
         logger.trace("Starting RunLoop")
         var result: ExpectResult = .noMatch
@@ -150,18 +175,35 @@ public class PTYProcess {
         currentExpect = nil
         return result
     }
+
+    private func pipeEvents(timeout: TimeInterval = .infinity) -> AsyncStream<String> {
+        AsyncStream { continuation in
+            continuation.onTermination = { @Sendable _ in
+                self.outputPipe.fileHandleForReading.readabilityHandler = nil
+            }
+
+            self.outputPipe.fileHandleForReading.readabilityHandler = { fileHandle in
+                if let content = self.readReceivedData(fileHandle: fileHandle) {
+                    continuation.yield(content)
+                }
+            }
+
+            let now = DispatchTime.now()
+            let deadline = timeout == .infinity ? now.advanced(by: .never) : now.advanced(by: .seconds(Int(timeout)))
+            DispatchQueue.global().asyncAfter(deadline: deadline) {
+                continuation.finish()
+            }
+        }
+    }
     
     private func findMatches(content: String, expressions: [String]) -> String? {
-        logger.trace("Content Read: \(content)")
         for expression in expressions {
             let range = content.range(of: expression, options: [.regularExpression, .caseInsensitive])
             if range != nil {
-                logger.trace("Match Found")
                 return expression
             }
         }
 
-        logger.trace("No Match")
         return nil
     }
     
@@ -188,6 +230,21 @@ public class PTYProcess {
             }
         }
     }
+
+    private func readReceivedData(fileHandle: FileHandle) -> String? {
+        let data = fileHandle.availableData
+
+        // Handle EOF State
+        guard data.count > 0 else {
+            return nil
+        }
+
+        guard let content = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+
+        return content
+    }
     
     private func didReceiveData(fileHandle: FileHandle) {
         let data = fileHandle.availableData
@@ -202,7 +259,8 @@ public class PTYProcess {
             stopBackgroundReading()
             return
         }
-        
+
+        logger.trace("Content Read: \(content)")
         let action = self.currentExpect?(content) ?? .exit
         switch action {
         case .exit:
