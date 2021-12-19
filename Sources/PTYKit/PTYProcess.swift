@@ -77,12 +77,23 @@ public class PTYProcess {
         try process.run()
         
         process.terminationHandler = { _ in
-            self.logger.info("Process Terminated: \(self.process.executableURL?.path ?? "<<UNKNOWN>>")")
+            self.logger.info("Unexpected Process Termination: \(self.process.executableURL?.path ?? "<<UNKNOWN>>")")
         }
     }
     
     public func terminate() {
         process.terminate()
+    }
+
+    public func terminate() async {
+        return await withCheckedContinuation { continuation in
+            process.terminationHandler = { _ in
+                self.logger.info("Process Termination: \(self.process.executableURL?.path ?? "<<UNKNOWN>>")")
+                continuation.resume()
+            }
+
+            process.terminate()
+        }
     }
     
     public func waitUntilExit() {
