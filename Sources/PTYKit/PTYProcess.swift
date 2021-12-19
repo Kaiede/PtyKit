@@ -188,9 +188,9 @@ public class PTYProcess {
                 }
             }
 
-            let now = DispatchTime.now()
-            let deadline = timeout == .infinity ? now.advanced(by: .never) : now.advanced(by: .seconds(Int(timeout)))
-            DispatchQueue.global().asyncAfter(deadline: deadline) {
+            let deadline = Date().advanced(by: timeout)
+            let wallDeadline = DispatchWallTime(date: deadline)
+            DispatchQueue.global().asyncAfter(wallDeadline: wallDeadline) {
                 continuation.finish()
             }
         }
