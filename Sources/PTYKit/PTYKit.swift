@@ -35,7 +35,7 @@ extension FileHandle {
             throw PTYError.HandleCreationFailed
         }
 
-        return FileHandle(fileDescriptor: hostDescriptor)
+        return FileHandle(fileDescriptor: hostDescriptor, closeOnDealloc: true)
     }
 
     public func getChildPTY() throws -> FileHandle {
