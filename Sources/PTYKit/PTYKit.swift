@@ -21,6 +21,7 @@
 
 import Foundation
 import CPTYKit
+import Logging
 
 public enum PTYError: Error {
     case HandleCreationFailed
@@ -28,12 +29,16 @@ public enum PTYError: Error {
     case UnlockFailed
 }
 
+private let logger: Logger = Logger(label: "ptykit")
+
 extension FileHandle {
     public static func openPTY() throws -> FileHandle {
         let hostDescriptor = CPTYKit_openpty()
         guard -1 != hostDescriptor else {
             throw PTYError.HandleCreationFailed
         }
+
+        logger.debug("Host PTY Opened with descriptor: \(hostDescriptor)")
 
         return FileHandle(fileDescriptor: hostDescriptor, closeOnDealloc: true)
     }
@@ -54,6 +59,8 @@ extension FileHandle {
             throw PTYError.HandleCreationFailed
         }
 
+        logger.debug("Child PTY Opened At: \(childDescriptor)")
+        
         return fileHandle
     }
 }

@@ -56,7 +56,7 @@ public class PTYProcess {
     }
 
     public init(_ launchExecutable: URL, arguments: [String]) throws {
-        logger = Logger(label: "PTYProcess:\(launchExecutable.lastPathComponent)")
+        logger = Logger(label: "ptykit.\(launchExecutable.lastPathComponent)")
         process = Process()
         process.executableURL = launchExecutable
         process.arguments = arguments
