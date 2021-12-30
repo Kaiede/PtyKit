@@ -66,7 +66,10 @@ public class PTYProcess {
         hostHandle = try FileHandle.openPTY()
         childHandle = try hostHandle.getChildPTY()
     }
-    
+
+    deinit {
+        close()
+    }
     
     public func run() throws {
         process.standardInput = childHandle
@@ -83,7 +86,7 @@ public class PTYProcess {
     
     public func terminate() {
         process.terminate()
-        close()
+        //close()
     }
 
     public func terminate() async {
@@ -99,7 +102,7 @@ public class PTYProcess {
     
     public func waitUntilExit() {
         process.waitUntilExit()
-        close()
+        //close()
     }
 
     private func close() {
