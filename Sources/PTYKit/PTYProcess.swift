@@ -103,12 +103,12 @@ public class PTYProcess {
     }
 
     private func close() {
-        /*do {
+        do {
             try childHandle.close()
             try hostHandle.close()
         } catch let error {
             self.logger.warning("Failed to close handles: \(error.localizedDescription)")
-        }*/
+        }
     }
     
     public func sendLine(_ content: String) throws {
