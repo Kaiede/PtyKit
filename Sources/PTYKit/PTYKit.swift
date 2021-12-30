@@ -40,7 +40,7 @@ extension FileHandle {
 
         let ptsPath = String(cString: CPTYKit_ptsname(hostDescriptor))
 
-        logger.debug("Host PTY Opened at: \(ptsPath) (\(hostDescriptor))")
+        logger.info("Host PTY Opened at: \(ptsPath) (\(hostDescriptor))")
 
         return FileHandle(fileDescriptor: hostDescriptor, closeOnDealloc: true)
     }
