@@ -32,22 +32,22 @@ public class PTYProcess {
         case keepListening
         case exit
     }
-    
+
     public enum ExpectResult: Equatable {
         case noMatch
         case match(String)
     }
-    
+
     let logger: Logger
     let process: Process
     var observer: NSObjectProtocol?
-    
+
     // PTY File Handles
     let hostHandle: FileHandle
     let childHandle: FileHandle
-    
+
     let outputPipe: Pipe
-    
+
     var currentExpect: ((String) -> ExpectAction)?
     var currentRunLoop: CFRunLoop?
 
@@ -60,7 +60,7 @@ public class PTYProcess {
         process = Process()
         process.executableURL = launchExecutable
         process.arguments = arguments
-        
+
         // Configure Handles
         outputPipe = Pipe()
         hostHandle = try FileHandle.openPTY()
@@ -68,25 +68,29 @@ public class PTYProcess {
     }
 
     deinit {
-        close()
+        Task {
+            await waitUntilExit()
+        }
     }
-    
+
+    // MARK: Execution Management
+
     public func run() throws {
         process.standardInput = childHandle
         process.standardError = outputPipe
         process.standardOutput = outputPipe
-        
+
         logger.trace("Launching")
         try process.run()
-        
+
         process.terminationHandler = { _ in
             self.logger.info("Unexpected Process Termination: \(self.process.executableURL?.path ?? "<<UNKNOWN>>")")
         }
     }
-    
+
     public func terminate() {
         process.terminate()
-        //close()
+        close()
     }
 
     public func terminate() async {
@@ -99,10 +103,18 @@ public class PTYProcess {
             process.terminate()
         }
     }
-    
+
     public func waitUntilExit() {
+        _waitUntilExit()
+    }
+
+    public func waitUntilExit() async {
+        _waitUntilExit()
+    }
+
+    private func _waitUntilExit() {
         process.waitUntilExit()
-        //close()
+        close()
     }
 
     private func close() {
@@ -113,29 +125,31 @@ public class PTYProcess {
             self.logger.warning("Failed to close handles: \(error.localizedDescription)")
         }
     }
-    
+
+    // MARK: Input / Output
+
     public func sendLine(_ content: String) throws {
         try send("\(content)\n")
     }
-    
+
     public func send(_ content: String) throws {
         guard process.isRunning else {
             return
         }
-        
+
         guard let data = content.data(using: .utf8) else {
             throw PTYProcessError.InvalidData
         }
-        
+
         logger.trace("Sending: \(content)")
         hostHandle.write(data)
     }
-    
+
     public func send(_ data: Data) {
         logger.trace("Sending Data: \(data.count) bytes")
         hostHandle.write(data)
     }
-    
+
     @available(OSX 10.15.4, *)
     public func send<Data: DataProtocol>(contentsOf data: Data) throws {
         logger.trace("Sending Data: \(data.count) bytes")
@@ -170,12 +184,11 @@ public class PTYProcess {
     public func expect(_ expressions: String, timeout: TimeInterval = .infinity) -> ExpectResult {
         return expect([expressions], timeout: timeout)
     }
-    
+
     public func expect(_ expressions: [String], timeout: TimeInterval = .infinity) -> ExpectResult {
         guard process.isRunning else {
             return .noMatch
         }
-        
 
         // Run the loop until we time out or we found a result
         logger.trace("Starting RunLoop")
@@ -186,17 +199,17 @@ public class PTYProcess {
                 result = .match(foundMatch)
                 return .exit
             }
-            
+
             return .keepListening
         }
-        
+
         let timeoutDate = Date().addingTimeInterval(timeout)
         while result == .noMatch && Date() < timeoutDate && process.isRunning {
             let _ = RunLoop.current.run(mode: .default, before: timeoutDate)
         }
 
         cleanupBackgroundReading()
-        
+
         currentExpect = nil
         return result
     }
@@ -220,7 +233,7 @@ public class PTYProcess {
             }
         }
     }
-    
+
     private func findMatches(content: String, expressions: [String]) -> String? {
         for expression in expressions {
             let range = content.range(of: expression, options: [.regularExpression, .caseInsensitive])
@@ -231,7 +244,7 @@ public class PTYProcess {
 
         return nil
     }
-    
+
     private func startBackgroundReading(expect: @escaping (String) -> ExpectAction) {
         DispatchQueue.main.async { [self] in
             logger.trace("Background Reading Start")
@@ -240,13 +253,13 @@ public class PTYProcess {
             outputPipe.fileHandleForReading.readabilityHandler = didReceiveData
         }
     }
-    
+
     private func cleanupBackgroundReading() {
         logger.trace("Background Reading Cleanup")
         outputPipe.fileHandleForReading.readabilityHandler = nil
         currentExpect = nil
     }
-    
+
     private func stopBackgroundReading() {
         DispatchQueue.main.async {
             self.logger.trace("Background Reading Stop")
@@ -270,16 +283,16 @@ public class PTYProcess {
 
         return content
     }
-    
+
     private func didReceiveData(fileHandle: FileHandle) {
         let data = fileHandle.availableData
-        
+
         // Handle EOF State
         guard data.count > 0 else {
             stopBackgroundReading()
             return
         }
-        
+
         guard let content = String(data: data, encoding: .utf8) else {
             stopBackgroundReading()
             return

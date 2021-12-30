@@ -62,7 +62,7 @@ extension FileHandle {
         }
 
         logger.debug("Child PTY Opened at: \(ptsPath)")
-        
+
         return fileHandle
     }
 }
