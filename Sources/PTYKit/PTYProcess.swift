@@ -83,6 +83,7 @@ public class PTYProcess {
     
     public func terminate() {
         process.terminate()
+        close()
     }
 
     public func terminate() async {
@@ -98,6 +99,16 @@ public class PTYProcess {
     
     public func waitUntilExit() {
         process.waitUntilExit()
+        close()
+    }
+
+    private func close() {
+        /*do {
+            try childHandle.close()
+            try hostHandle.close()
+        } catch let error {
+            self.logger.warning("Failed to close handles: \(error.localizedDescription)")
+        }*/
     }
     
     public func sendLine(_ content: String) throws {

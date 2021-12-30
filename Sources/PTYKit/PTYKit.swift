@@ -38,7 +38,9 @@ extension FileHandle {
             throw PTYError.HandleCreationFailed
         }
 
-        logger.debug("Host PTY Opened with descriptor: \(hostDescriptor)")
+        let ptsPath = String(cString: CPTYKit_ptsname(hostDescriptor))
+
+        logger.debug("Host PTY Opened at: \(ptsPath) (\(hostDescriptor))")
 
         return FileHandle(fileDescriptor: hostDescriptor, closeOnDealloc: true)
     }
@@ -53,13 +55,13 @@ extension FileHandle {
             throw PTYError.UnlockFailed
         }
 
-        let childDescriptor = String(cString: CPTYKit_ptsname(hostDescriptor))
+        let ptsPath = String(cString: CPTYKit_ptsname(hostDescriptor))
 
-        guard let fileHandle = FileHandle(forUpdatingAtPath: childDescriptor) else {
+        guard let fileHandle = FileHandle(forUpdatingAtPath: ptsPath) else {
             throw PTYError.HandleCreationFailed
         }
 
-        logger.debug("Child PTY Opened At: \(childDescriptor)")
+        logger.debug("Child PTY Opened at: \(ptsPath)")
         
         return fileHandle
     }
