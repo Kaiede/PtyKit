@@ -23,6 +23,9 @@ let package = Package(
                 "CPTYKit",
                 .product(name: "Logging", package: "swift-log")
             ]),
+        .testTarget(
+            name: "PTYKitTests",
+            dependencies: ["PTYKit"]),
         .target(name: "CPTYKit")
     ]
 )
