@@ -68,10 +68,8 @@ public class PTYProcess {
     }
 
     deinit {
-        Task {
-            if process.isRunning {
-                await terminate()
-            }
+        if process.isRunning {
+            terminate()
         }
     }
 
