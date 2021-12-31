@@ -34,7 +34,7 @@ final class TerminalTests: XCTestCase {
         let asyncExpect = expectation(description: "Task Completed")
         Task {
             do {
-                for _ in 0...256 {
+                for _ in 0...128 {
                     let terminal = try PseudoTerminal()
                     
                     let match = await terminal.expect("Basic Expectation", timeout: 0.01)
@@ -52,7 +52,7 @@ final class TerminalTests: XCTestCase {
 
     func testOpenManyTerminalsInParallel() {
         do {
-            let array = Array(0...256)
+            let array = Array(0...128)
             let terminals = try array.map({ _ in
                 return try PseudoTerminal()
             })

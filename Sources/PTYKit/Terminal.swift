@@ -27,6 +27,8 @@ import CPTYKit
 private let logger = Logger(label: "ptykit.terminal")
 
 public final class PseudoTerminal {
+    public typealias TerminalListener = (String) -> Void
+
     // PTY Handles
     // - Host is for reading/writing
     // - Child is to attach to child processes
@@ -36,6 +38,9 @@ public final class PseudoTerminal {
     private let attachLock: NSRecursiveLock
     private var attachToken: Int?
     private var detachHandlers: [() -> Void]
+
+    private var currentExpect: TerminalListener?
+    private var currentListener: TerminalListener?
 
     public var isAttached: Bool {
         return attachToken != nil
@@ -47,6 +52,10 @@ public final class PseudoTerminal {
         attachToken = nil
         hostHandle = try PseudoTerminal.openPTY()
         childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle)
+
+        hostHandle.readabilityHandler = { handle in
+            self.readReceivedData(fileHandle: handle)
+        }
     }
 
     deinit {
@@ -192,6 +201,22 @@ extension PseudoTerminal {
         case match(String)
     }
 
+    public func listen(for expression: String, handler: @escaping TerminalListener) {
+        listen(for: [expression], handler: handler)
+    }
+
+    public func listen(for expressions: [String], handler: @escaping TerminalListener) {
+        self.currentListener = { content in
+            if let foundMatch = self.findMatches(content: content, expressions: expressions) {
+                handler(foundMatch)
+            }
+        }
+    }
+
+    public func stopListening() {
+        self.currentListener = nil
+    }
+
     public func expect(_ expressions: String, timeout: TimeInterval = .infinity) async -> ExpectResult {
         return await expect([expressions], timeout: timeout)
     }
@@ -216,13 +241,11 @@ extension PseudoTerminal {
     private func pipeEvents(timeout: TimeInterval = .infinity) -> AsyncStream<String> {
         AsyncStream { continuation in
             continuation.onTermination = { @Sendable _ in
-                self.hostHandle.readabilityHandler = nil
+                self.currentExpect = nil
             }
 
-            self.hostHandle.readabilityHandler = { fileHandle in
-                if let content = self.readReceivedData(fileHandle: fileHandle) {
-                    continuation.yield(content)
-                }
+            self.currentExpect = { content in
+                continuation.yield(content)
             }
 
             if timeout != .infinity {
@@ -246,19 +269,26 @@ extension PseudoTerminal {
         return nil
     }
 
-    private func readReceivedData(fileHandle: FileHandle) -> String? {
+    private func readReceivedData(fileHandle: FileHandle) {
         let data = fileHandle.availableData
 
         // Handle EOF State
         guard data.count > 0 else {
-            return nil
+            return
         }
 
         guard let content = String(data: data, encoding: .utf8) else {
-            return nil
+            logger.error("Unable to read string data from terminal")
+            return
         }
 
-        return content
+        if let handler = currentExpect {
+            handler(content)
+        }
+
+        if let handler = currentListener {
+            handler(content)
+        }
     }
 }
 
