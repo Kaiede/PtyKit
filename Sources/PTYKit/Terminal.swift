@@ -86,7 +86,7 @@ public final class PseudoTerminal {
         detachHandlers = []
     }
 
-    func waitForDetach() async {
+    public func waitForDetach() async {
         let _: Bool = await withCheckedContinuation({ continuation in
             let didAdd = addHandler {
                 continuation.resume(returning: true)
