@@ -124,6 +124,7 @@ extension PseudoTerminal {
 
     public func send(_ content: String) throws {
         guard let data = content.data(using: .utf8) else {
+            logger.error("Failed to get UTF8 data for content: \(content)")
             throw PTYError.invalidData
         }
 
