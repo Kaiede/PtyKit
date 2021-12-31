@@ -31,7 +31,6 @@ public extension Process {
         self.arguments = arguments
 
         let token = try terminal.attachProcess()
-        logger.debug("Attached process to terminal")
 
         self.standardInput = terminal.childHandle
         self.standardError = terminal.childHandle
@@ -41,7 +40,6 @@ public extension Process {
             do {
                 logger.trace("Process terminated")
                 try terminal.detachProcess(token: token)
-                logger.debug("Detached from terminal")
             } catch let error {
                 logger.warning("Failed to detach process: \(error.localizedDescription)")
             }

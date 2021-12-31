@@ -68,6 +68,7 @@ public final class PseudoTerminal {
 
         let token = Int.random(in: Int.min...Int.max)
         attachToken = token
+        logger.debug("Process attached")
         return token
     }
 
@@ -80,10 +81,12 @@ public final class PseudoTerminal {
         }
 
         attachToken = nil
+        logger.debug("Calling process detach handlers")
         for handler in detachHandlers {
             handler()
         }
         detachHandlers = []
+        logger.debug("Process detached")
     }
 
     public func waitForDetach() async {
