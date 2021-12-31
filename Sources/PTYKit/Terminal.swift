@@ -35,6 +35,7 @@ public final class PseudoTerminal {
 
     private let attachLock: NSRecursiveLock
     private var attachToken: Int?
+    private var detachHandlers: [() -> Void]
 
     public var isAttached: Bool {
         return attachToken != nil
@@ -42,6 +43,7 @@ public final class PseudoTerminal {
 
     public init() throws {
         attachLock = NSRecursiveLock()
+        detachHandlers = []
         attachToken = nil
         hostHandle = try PseudoTerminal.openPTY()
         childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle)
@@ -78,6 +80,41 @@ public final class PseudoTerminal {
         }
 
         attachToken = nil
+        for handler in detachHandlers {
+            handler()
+        }
+        detachHandlers = []
+    }
+
+    func waitForDetach() async {
+        let _: Bool = await withCheckedContinuation({ continuation in
+            let didAdd = addHandler {
+                continuation.resume(returning: true)
+            }
+
+            if !didAdd {
+                continuation.resume(returning: false)
+            }
+        })
+    }
+
+    private func isProcessAttached() -> Bool {
+        attachLock.lock()
+        defer { attachLock.unlock() }
+
+        return isAttached
+    }
+
+    private func addHandler(_ closure: @escaping () -> Void) -> Bool {
+        attachLock.lock()
+        defer { attachLock.unlock() }
+
+        if !isAttached {
+            return false
+        }
+
+        detachHandlers.append(closure)
+        return true
     }
 
     private static func openPTY() throws -> FileHandle {
