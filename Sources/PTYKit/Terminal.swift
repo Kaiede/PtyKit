@@ -208,6 +208,7 @@ extension PseudoTerminal {
     public func listen(for expressions: [String], handler: @escaping TerminalListener) {
         self.currentListener = { content in
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
+                logger.trace("Match found for listener, calling")
                 handler(foundMatch)
             }
         }
@@ -249,9 +250,11 @@ extension PseudoTerminal {
             }
 
             if timeout != .infinity {
+                logger.debug("Timeout for Expectation is \(timeout) s")
                 let deadline = Date().advanced(by: timeout)
                 let wallDeadline = DispatchWallTime(date: deadline)
                 DispatchQueue.global().asyncAfter(wallDeadline: wallDeadline) {
+                    logger.debug("Timeout Reached")
                     continuation.finish()
                 }
             }
@@ -270,10 +273,12 @@ extension PseudoTerminal {
     }
 
     private func readReceivedData(fileHandle: FileHandle) {
+        logger.trace("Data Received on file descriptor (\(fileHandle.fileDescriptor))")
         let data = fileHandle.availableData
 
         // Handle EOF State
         guard data.count > 0 else {
+            logger.debug("EOF received on file descriptor (\(fileHandle.fileDescriptor))")
             return
         }
 
@@ -283,10 +288,12 @@ extension PseudoTerminal {
         }
 
         if let handler = currentExpect {
+            logger.trace("Processing Expect")
             handler(content)
         }
 
         if let handler = currentListener {
+            logger.trace("Processing Listener")
             handler(content)
         }
     }

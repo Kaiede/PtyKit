@@ -34,3 +34,16 @@ enum PTYError: Error {
     case alreadyAttached
     case notAttached
 }
+
+extension PTYError: CustomStringConvertible {
+    var description: String {
+        switch self {
+        case .grantFailed: return "PTY could not be granted"
+        case .handleCreationFailed: return "PTY file handle could not be created"
+        case .unlockFailed: return "PTY could not be unlocked"
+        case .invalidData: return "UTF8 data could not be generated for string"
+        case .alreadyAttached: return "PTY already has a process attached"
+        case .notAttached: return "PTY isn't attached to this process"
+        }
+    }
+}
