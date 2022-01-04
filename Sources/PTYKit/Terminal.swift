@@ -227,7 +227,8 @@ extension PseudoTerminal {
         logger.debug("Expecting: \(expressions)")
 
         // Due to what is believed to be rdar://82985344, we need to clean up
-        // the pipe once we've gotten a match.
+        // the pipe once we've gotten a match. Turns out that the continuation
+        // doesn't terminate until the timeout has fired. Unfortunate.
         let pipeId = UUID()
         defer { cancelPipe(id: pipeId) }
 
@@ -246,8 +247,11 @@ extension PseudoTerminal {
     }
 
     private func cancelPipe(id: UUID) {
-        logger.trace("Removing Expectation \(id.uuidString)")
-        currentExpects.removeValue(forKey: id.uuidString)
+        let continuationId = id.uuidString
+        if currentExpects[continuationId] != nil {
+            logger.trace("Removing Expectation \(continuationId)")
+            currentExpects.removeValue(forKey: continuationId)
+        }
     }
 
     private func pipeEvents(timeout: TimeInterval = .infinity, id: UUID) -> AsyncStream<String> {
