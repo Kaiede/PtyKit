@@ -39,7 +39,7 @@ public final class PseudoTerminal {
     private var attachToken: Int?
     private var detachHandlers: [() -> Void]
 
-    private var currentExpect: TerminalListener?
+    private var currentExpects: [String:TerminalListener]
     private var currentListener: TerminalListener?
 
     public var isAttached: Bool {
@@ -49,6 +49,7 @@ public final class PseudoTerminal {
     public init() throws {
         attachLock = NSRecursiveLock()
         detachHandlers = []
+        currentExpects = [:]
         attachToken = nil
         hostHandle = try PseudoTerminal.openPTY()
         childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle)
@@ -241,11 +242,13 @@ extension PseudoTerminal {
 
     private func pipeEvents(timeout: TimeInterval = .infinity) -> AsyncStream<String> {
         AsyncStream { continuation in
+            let continuationId = UUID().uuidString
+
             continuation.onTermination = { @Sendable _ in
-                self.currentExpect = nil
+                self.currentExpects.removeValue(forKey: continuationId)
             }
 
-            self.currentExpect = { content in
+            self.currentExpects[continuationId] = { content in
                 continuation.yield(content)
             }
 
@@ -254,8 +257,10 @@ extension PseudoTerminal {
                 let deadline = Date().advanced(by: timeout)
                 let wallDeadline = DispatchWallTime(date: deadline)
                 DispatchQueue.global().asyncAfter(wallDeadline: wallDeadline) {
-                    logger.debug("Timeout Reached")
-                    continuation.finish()
+                    if self.currentExpects[continuationId] != nil {
+                        logger.debug("Timeout Reached")
+                        continuation.finish()
+                    }
                 }
             }
         }
@@ -287,8 +292,10 @@ extension PseudoTerminal {
             return
         }
 
-        if let handler = currentExpect {
-            logger.trace("Processing Expect")
+        if currentExpects.count > 0 {
+            logger.trace("Processing \(currentExpects.count) Expects")
+        }
+        for handler in currentExpects.values {
             handler(content)
         }
 
