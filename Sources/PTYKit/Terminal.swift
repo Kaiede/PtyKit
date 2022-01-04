@@ -245,9 +245,11 @@ extension PseudoTerminal {
             let continuationId = UUID().uuidString
 
             continuation.onTermination = { @Sendable _ in
+                logger.trace("Removing Expectation \(continuationId)")
                 self.currentExpects.removeValue(forKey: continuationId)
             }
 
+            logger.trace("Adding Expectation \(continuationId)")
             self.currentExpects[continuationId] = { content in
                 continuation.yield(content)
             }
@@ -258,7 +260,7 @@ extension PseudoTerminal {
                 let wallDeadline = DispatchWallTime(date: deadline)
                 DispatchQueue.global().asyncAfter(wallDeadline: wallDeadline) {
                     if self.currentExpects[continuationId] != nil {
-                        logger.debug("Timeout Reached")
+                        logger.debug("Timeout Reached for \(continuationId)")
                         continuation.finish()
                     }
                 }
