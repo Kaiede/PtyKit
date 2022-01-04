@@ -226,7 +226,12 @@ extension PseudoTerminal {
     public func expect(_ expressions: [String], timeout: TimeInterval = .infinity) async -> ExpectResult {
         logger.debug("Expecting: \(expressions)")
 
-        for await content in pipeEvents(timeout: timeout) {
+        // Due to what is believed to be rdar://82985344, we need to clean up
+        // the pipe once we've gotten a match.
+        let pipeId = UUID()
+        defer { cancelPipe(id: pipeId) }
+
+        for await content in pipeEvents(timeout: timeout, id: pipeId) {
             logger.debug("Content Read: \(content)")
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
                 logger.debug("Match Found: \(content)")
@@ -240,13 +245,17 @@ extension PseudoTerminal {
         return .noMatch
     }
 
-    private func pipeEvents(timeout: TimeInterval = .infinity) -> AsyncStream<String> {
+    private func cancelPipe(id: UUID) {
+        logger.trace("Removing Expectation \(id.uuidString)")
+        currentExpects.removeValue(forKey: id.uuidString)
+    }
+
+    private func pipeEvents(timeout: TimeInterval = .infinity, id: UUID) -> AsyncStream<String> {
         AsyncStream { continuation in
-            let continuationId = UUID().uuidString
+            let continuationId = id.uuidString
 
             continuation.onTermination = { @Sendable _ in
-                logger.trace("Removing Expectation \(continuationId)")
-                self.currentExpects.removeValue(forKey: continuationId)
+                self.cancelPipe(id: id)
             }
 
             logger.trace("Adding Expectation \(continuationId)")
