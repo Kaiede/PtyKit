@@ -165,6 +165,30 @@ public final class PseudoTerminal {
     }
 }
 
+// MARK: Window Size
+
+extension PseudoTerminal {
+    public func setWindowSize(columns: UInt16, rows: UInt16) throws {
+        var size = winsize(ws_row: rows, ws_col: columns, ws_xpixel: 0, ws_ypixel: 0)
+        let result = ioctl(hostHandle.fileDescriptor, TIOCSWINSZ, &size)
+
+        if let errorCode = POSIXErrorCode(rawValue: result) {
+            throw POSIXError(errorCode)
+        }
+    }
+
+    public func getWindowSize() throws -> winsize {
+        var size = winsize()
+        let result = ioctl(hostHandle.fileDescriptor, TIOCGWINSZ, &size)
+
+        if let errorCode = POSIXErrorCode(rawValue: result) {
+            throw POSIXError(errorCode)
+        }
+
+        return size
+    }
+}
+
 // MARK: Writing
 
 extension PseudoTerminal {

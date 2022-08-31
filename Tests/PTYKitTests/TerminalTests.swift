@@ -89,4 +89,19 @@ final class TerminalTests: XCTestCase {
 
         waitForExpectations(timeout: 5)
     }
+
+    func testWindowSize() throws {
+        let terminal = try PseudoTerminal()
+
+        // Why is this 0x0 by default on Mac?
+        let size = try terminal.getWindowSize()
+        XCTAssertEqual(size.ws_col, 0)
+        XCTAssertEqual(size.ws_row, 0)
+
+        // Set some value and test that it fetches back
+        try terminal.setWindowSize(columns: 80, rows: 24)
+        let size2 = try terminal.getWindowSize()
+        XCTAssertEqual(size2.ws_col, 80)
+        XCTAssertEqual(size2.ws_row, 24)
+    }
 }
