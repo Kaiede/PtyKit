@@ -173,7 +173,7 @@ extension PseudoTerminal {
 
         // Parent Terminal
         do {
-            let result = ioctl(hostHandle.fileDescriptor, TIOCSWINSZ, &size)
+            let result = ioctl(hostHandle.fileDescriptor, UInt(TIOCSWINSZ), &size)
             if let errorCode = POSIXErrorCode(rawValue: result) {
                 throw POSIXError(errorCode)
             }
@@ -181,7 +181,7 @@ extension PseudoTerminal {
 
         // Child Terminal
         do {
-            let result = ioctl(childHandle.fileDescriptor, TIOCSWINSZ, &size)
+            let result = ioctl(childHandle.fileDescriptor, UInt(TIOCSWINSZ), &size)
             if let errorCode = POSIXErrorCode(rawValue: result) {
                 throw POSIXError(errorCode)
             }
