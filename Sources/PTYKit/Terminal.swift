@@ -191,7 +191,7 @@ extension PseudoTerminal {
 
     public func getWindowSize() throws -> winsize {
         var size = winsize()
-        let result = ioctl(childHandle.fileDescriptor, TIOCGWINSZ, &size)
+        let result = ioctl(childHandle.fileDescriptor, UInt(TIOCGWINSZ), &size)
 
         if let errorCode = POSIXErrorCode(rawValue: result) {
             throw POSIXError(errorCode)
