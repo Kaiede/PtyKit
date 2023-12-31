@@ -249,6 +249,8 @@ extension PseudoTerminal {
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
                 logger.trace("Match found, calling listener (\(self.identifier))")
                 handler(foundMatch)
+            } else {
+                logger.trace("No match found for content: \(content) (\(self.identifier))")
             }
         }
     }
