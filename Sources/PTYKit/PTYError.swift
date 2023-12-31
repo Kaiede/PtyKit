@@ -47,3 +47,7 @@ extension PTYError: CustomStringConvertible {
         }
     }
 }
+
+extension PTYError {
+    var localizedDescription: String { description }
+}

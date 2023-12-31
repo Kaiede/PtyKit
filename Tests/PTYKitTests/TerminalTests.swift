@@ -104,4 +104,10 @@ final class TerminalTests: XCTestCase {
         XCTAssertEqual(size2.ws_col, 80)
         XCTAssertEqual(size2.ws_row, 24)
     }
+
+    func testError() throws {
+        let example = "Failed to get an error: \(PTYError.alreadyAttached)"
+        XCTAssertEqual(example, "Failed to get an error: \(PTYError.alreadyAttached.description)")
+        XCTAssertEqual(example, "Failed to get an error: \(PTYError.alreadyAttached.localizedDescription)")
+    }
 }
