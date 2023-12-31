@@ -35,6 +35,7 @@ public final class PseudoTerminal {
     let hostHandle: FileHandle
     let childHandle: FileHandle
 
+    private let identifier: String
     private let attachLock: NSRecursiveLock
     private var attachToken: Int?
     private var detachHandlers: [() -> Void]
@@ -46,13 +47,14 @@ public final class PseudoTerminal {
         return attachToken != nil
     }
 
-    public init() throws {
+    public init(identifier: String = "Terminal") throws {
+        self.identifier = identifier
         attachLock = NSRecursiveLock()
         detachHandlers = []
         currentExpects = [:]
         attachToken = nil
-        hostHandle = try PseudoTerminal.openPTY()
-        childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle)
+        hostHandle = try PseudoTerminal.openPTY(identifier: identifier)
+        childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle, identifier: identifier)
 
         hostHandle.readabilityHandler = { handle in
             self.readReceivedData(fileHandle: handle)
@@ -91,12 +93,12 @@ public final class PseudoTerminal {
         }
 
         attachToken = nil
-        logger.debug("Calling process detach handlers")
+        logger.debug("Calling process detach handlers (\(identifier))")
         for handler in detachHandlers {
             handler()
         }
         detachHandlers = []
-        logger.debug("Process detached")
+        logger.debug("Process detached (\(identifier))")
     }
 
     public func waitForDetach() async {
@@ -130,7 +132,7 @@ public final class PseudoTerminal {
         return true
     }
 
-    private static func openPTY() throws -> FileHandle {
+    private static func openPTY(identifier: String) throws -> FileHandle {
         let hostDescriptor = CPTYKit_openpty()
         guard -1 != hostDescriptor else {
             throw PTYError.handleCreationFailed
@@ -138,12 +140,12 @@ public final class PseudoTerminal {
 
         let ptsPath = String(cString: CPTYKit_ptsname(hostDescriptor))
 
-        logger.info("Host PTY Handle Opened: \(ptsPath) (\(hostDescriptor))")
+        logger.info("Host PTY Handle Opened: \(ptsPath)  (\(identifier) - \(hostDescriptor))")
 
         return FileHandle(fileDescriptor: hostDescriptor, closeOnDealloc: true)
     }
 
-    private static func getChildPTY(parent: FileHandle) throws -> FileHandle {
+    private static func getChildPTY(parent: FileHandle, identifier: String) throws -> FileHandle {
         let hostDescriptor = parent.fileDescriptor
         guard 0 == CPTYKit_grantpt(hostDescriptor) else {
             throw PTYError.grantFailed
@@ -159,7 +161,7 @@ public final class PseudoTerminal {
             throw PTYError.handleCreationFailed
         }
 
-        logger.info("Child PTY Handle Opened: \(ptsPath) (\(fileHandle.fileDescriptor))")
+        logger.info("Child PTY Handle Opened: \(ptsPath) (\(identifier) - \(fileHandle.fileDescriptor))")
 
         return fileHandle
     }
@@ -210,22 +212,22 @@ extension PseudoTerminal {
 
     public func send(_ content: String) throws {
         guard let data = content.data(using: .utf8) else {
-            logger.error("Failed to get UTF8 data for content: \(content)")
+            logger.error("Failed to get UTF8 data for content: \(content) (\(identifier))")
             throw PTYError.invalidData
         }
 
-        logger.trace("Sending: \(content)")
+        logger.trace("Sending: \(content) (\(identifier))")
         hostHandle.write(data)
     }
 
     public func send(_ data: Data) {
-        logger.trace("Sending Data: \(data.count) bytes")
+        logger.trace("Sending Data: \(data.count) bytes (\(identifier))")
         hostHandle.write(data)
     }
 
     @available(OSX 10.15.4, *)
     public func send<Data: DataProtocol>(contentsOf data: Data) throws {
-        logger.trace("Sending Data: \(data.count) bytes")
+        logger.trace("Sending Data: \(data.count) bytes (\(identifier))")
         try hostHandle.write(contentsOf: data)
     }
 }
@@ -245,7 +247,7 @@ extension PseudoTerminal {
     public func listen(for expressions: [String], handler: @escaping TerminalListener) {
         self.currentListener = { content in
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
-                logger.trace("Match found for listener, calling")
+                logger.trace("Match found, calling listener (\(self.identifier))")
                 handler(foundMatch)
             }
         }
@@ -260,7 +262,7 @@ extension PseudoTerminal {
     }
 
     public func expect(_ expressions: [String], timeout: TimeInterval = .infinity) async -> ExpectResult {
-        logger.debug("Expecting: \(expressions)")
+        logger.debug("Expecting: \(expressions) (\(identifier))")
 
         // Due to what is believed to be rdar://82985344, we need to clean up
         // the pipe once we've gotten a match. Turns out that the continuation
@@ -269,23 +271,23 @@ extension PseudoTerminal {
         defer { cancelPipe(id: pipeId) }
 
         for await content in pipeEvents(timeout: timeout, id: pipeId) {
-            logger.debug("Content Read: \(content)")
+            logger.debug("Content Read: \(content) (\(identifier))")
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
-                logger.debug("Match Found: \(content)")
+                logger.debug("Match Found: \(content) (\(identifier))")
                 return .match(foundMatch)
             }
-            logger.trace("Content Has No Matches")
+            logger.trace("Content Has No Matches (\(identifier))")
         }
 
         // If we existed the loop, then we timed out without a match.
-        logger.debug("No Matches Found, Timed Out")
+        logger.debug("No Matches Found, Timed Out (\(identifier))")
         return .noMatch
     }
 
     private func cancelPipe(id: UUID) {
         let continuationId = id.uuidString
         if currentExpects[continuationId] != nil {
-            logger.trace("Removing Expectation \(continuationId)")
+            logger.trace("Removing Expectation \(continuationId) (\(identifier))")
             currentExpects.removeValue(forKey: continuationId)
         }
     }
@@ -298,13 +300,13 @@ extension PseudoTerminal {
                 self.cancelPipe(id: id)
             }
 
-            logger.trace("Adding Expectation \(continuationId)")
+            logger.trace("Adding Expectation \(continuationId) (\(identifier))")
             self.currentExpects[continuationId] = { content in
                 continuation.yield(content)
             }
 
             if timeout != .infinity {
-                logger.debug("Timeout for Expectation is \(timeout) s")
+                logger.debug("Timeout for Expectation is \(timeout) s (\(identifier))")
                 let deadline = Date().advanced(by: timeout)
                 let wallDeadline = DispatchWallTime(date: deadline)
                 DispatchQueue.global().asyncAfter(wallDeadline: wallDeadline) {
@@ -329,29 +331,29 @@ extension PseudoTerminal {
     }
 
     private func readReceivedData(fileHandle: FileHandle) {
-        logger.trace("Data Received on file descriptor (\(fileHandle.fileDescriptor))")
+        logger.trace("Data Received on file descriptor (\(identifier) - \(fileHandle.fileDescriptor))")
         let data = fileHandle.availableData
 
         // Handle EOF State
         guard data.count > 0 else {
-            logger.debug("EOF received on file descriptor (\(fileHandle.fileDescriptor))")
+            logger.debug("EOF received on file descriptor (\(identifier) - \(fileHandle.fileDescriptor))")
             return
         }
 
         guard let content = String(data: data, encoding: .utf8) else {
-            logger.error("Unable to read string data from terminal")
+            logger.error("Unable to read string data from terminal (\(identifier))")
             return
         }
 
         if currentExpects.count > 0 {
-            logger.trace("Processing \(currentExpects.count) Expects")
+            logger.trace("Processing \(currentExpects.count) Expects (\(identifier))")
         }
         for handler in currentExpects.values {
             handler(content)
         }
 
         if let handler = currentListener {
-            logger.trace("Processing Listener")
+            logger.trace("Processing Listener (\(identifier))")
             handler(content)
         }
     }

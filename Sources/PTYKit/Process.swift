@@ -38,7 +38,7 @@ public extension Process {
 
         self.terminationHandler = { _ in
             do {
-                logger.trace("Process terminated")
+                logger.trace("Process terminated (executable: \(self.executableURL?.absoluteString ?? "UNK")")
                 try terminal.detachProcess(token: token)
             } catch let error {
                 logger.warning("Failed to detach process: \(error.localizedDescription)")
