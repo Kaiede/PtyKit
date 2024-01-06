@@ -207,7 +207,7 @@ extension PseudoTerminal {
 
 extension PseudoTerminal {
     public func sendLine(_ content: String) throws {
-        try send("\(content)\n")
+        try send("\(content)\r\n")
     }
 
     public func send(_ content: String) throws {
