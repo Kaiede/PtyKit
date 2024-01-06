@@ -29,6 +29,11 @@ private let logger = Logger(label: "ptykit.terminal")
 public final class PseudoTerminal {
     public typealias TerminalListener = (String) -> Void
 
+    public enum Newline: String {
+        case `default` = "\n"
+        case ssh = "\r\n"
+    }
+
     // PTY Handles
     // - Host is for reading/writing
     // - Child is to attach to child processes
@@ -206,8 +211,8 @@ extension PseudoTerminal {
 // MARK: Writing
 
 extension PseudoTerminal {
-    public func sendLine(_ content: String) throws {
-        try send("\(content)\r\n")
+    public func sendLine(_ content: String, newline: Newline = .default) throws {
+        try send("\(content)\(newline)")
     }
 
     public func send(_ content: String) throws {
