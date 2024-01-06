@@ -47,8 +47,8 @@ final class TerminalTests: XCTestCase {
             expectation.expectedFulfillmentCount = 2 // both send and receive should show up
             try terminal.sendLine("Hello World")
             terminal.listen(for: ".*", handler: { line in
-                // The \r\n becomes two \r\n via 'cat'
-                XCTAssertEqual(line, "Hello World\r\n\r\n")
+                // The \r should still wind up being an \r\n
+                XCTAssertEqual(line, "Hello World\r\n")
                 expectation.fulfill()
             })
 

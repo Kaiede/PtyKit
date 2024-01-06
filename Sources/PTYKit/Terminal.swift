@@ -216,7 +216,7 @@ extension PseudoTerminal {
     public func sendLine(_ content: String) throws {
         switch newline {
         case .default: try send("\(content)\n")
-        case .ssh: try send("\(content)\r\n")
+        case .ssh: try send("\(content)\r")
         }
     }
 
