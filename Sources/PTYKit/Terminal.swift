@@ -26,9 +26,9 @@ import CPTYKit
 
 private let logger = Logger(label: "ptykit.terminal")
 
-public enum TerminalNewline: String {
-    case `default` = "\n"
-    case ssh = "\r\n"
+public enum TerminalNewline {
+    case `default`
+    case ssh
 }
 
 public final class PseudoTerminal {
@@ -214,7 +214,10 @@ extension PseudoTerminal {
 
 extension PseudoTerminal {
     public func sendLine(_ content: String) throws {
-        try send("\(content)\(newline.rawValue)")
+        switch newline {
+        case .default: try send("\(content)\n")
+        case .ssh: try send("\(content)\r\n")
+        }
     }
 
     public func send(_ content: String) throws {
