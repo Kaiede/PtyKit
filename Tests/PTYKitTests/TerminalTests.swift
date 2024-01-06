@@ -12,6 +12,52 @@ final class TerminalTests: XCTestCase {
         }
     }
 
+    func testDefaultNewline() {
+        do {
+            let terminal = try PseudoTerminal()
+            let shellUrl = URL(fileURLWithPath: "/bin/cat")
+            let process = try Process(shellUrl, arguments: [], terminal: terminal)
+
+            try process.run()
+
+            let expectation = expectation(description: "Should get results")
+            expectation.expectedFulfillmentCount = 2 // both send and receive should show up
+            try terminal.sendLine("Hello World")
+            terminal.listen(for: ".*", handler: { line in
+                // The \n becomes a single \r\n via 'cat'
+                XCTAssertEqual(line, "Hello World\r\n")
+                expectation.fulfill()
+            })
+
+            wait(for: [expectation], timeout: 0.1)
+        } catch let error {
+            XCTFail("\(error.localizedDescription)")
+        }
+    }
+
+    func testSshNewline() {
+        do {
+            let terminal = try PseudoTerminal(newline: .ssh)
+            let shellUrl = URL(fileURLWithPath: "/bin/cat")
+            let process = try Process(shellUrl, arguments: [], terminal: terminal)
+
+            try process.run()
+
+            let expectation = expectation(description: "Should get results")
+            expectation.expectedFulfillmentCount = 2 // both send and receive should show up
+            try terminal.sendLine("Hello World")
+            terminal.listen(for: ".*", handler: { line in
+                // The \r\n becomes two \r\n via 'cat'
+                XCTAssertEqual(line, "Hello World\r\n\r\n")
+                expectation.fulfill()
+            })
+
+            wait(for: [expectation], timeout: 0.1)
+        } catch let error {
+            XCTFail("\(error.localizedDescription)")
+        }
+    }
+
     func testBasicReceive() {
         let asyncExpect = expectation(description: "Task Completed")
         Task {

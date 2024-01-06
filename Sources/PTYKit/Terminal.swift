@@ -214,7 +214,7 @@ extension PseudoTerminal {
 
 extension PseudoTerminal {
     public func sendLine(_ content: String) throws {
-        try send("\(content)\(newline)")
+        try send("\(content)\(newline.rawValue)")
     }
 
     public func send(_ content: String) throws {
@@ -255,7 +255,7 @@ extension PseudoTerminal {
         self.currentListener = { content in
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
                 logger.trace("Match found, calling listener (\(self.identifier))")
-                handler(foundMatch)
+                handler(content)
             } else {
                 logger.trace("No match found for content: \(content) (\(self.identifier))")
             }
