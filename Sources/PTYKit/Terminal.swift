@@ -26,13 +26,13 @@ import CPTYKit
 
 private let logger = Logger(label: "ptykit.terminal")
 
+public enum TerminalNewline: String {
+    case `default` = "\n"
+    case ssh = "\r\n"
+}
+
 public final class PseudoTerminal {
     public typealias TerminalListener = (String) -> Void
-
-    public enum Newline: String {
-        case `default` = "\n"
-        case ssh = "\r\n"
-    }
 
     // PTY Handles
     // - Host is for reading/writing
@@ -41,6 +41,7 @@ public final class PseudoTerminal {
     let childHandle: FileHandle
 
     private let identifier: String
+    private let newline: TerminalNewline
     private let attachLock: NSRecursiveLock
     private var attachToken: Int?
     private var detachHandlers: [() -> Void]
@@ -52,8 +53,9 @@ public final class PseudoTerminal {
         return attachToken != nil
     }
 
-    public init(identifier: String = "Terminal") throws {
+    public init(identifier: String = "Terminal", newline: TerminalNewline = .default) throws {
         self.identifier = identifier
+        self.newline = newline
         attachLock = NSRecursiveLock()
         detachHandlers = []
         currentExpects = [:]
@@ -211,7 +213,7 @@ extension PseudoTerminal {
 // MARK: Writing
 
 extension PseudoTerminal {
-    public func sendLine(_ content: String, newline: Newline = .default) throws {
+    public func sendLine(_ content: String) throws {
         try send("\(content)\(newline)")
     }
 
