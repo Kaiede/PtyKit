@@ -30,16 +30,16 @@ public extension Process {
         self.executableURL = launchExecutable
         self.arguments = arguments
 
-        let token = try terminal.attachProcess()
+        let channel = try terminal.connect()
 
-        self.standardInput = terminal.childHandle
-        self.standardError = terminal.childHandle
-        self.standardOutput = terminal.childHandle
+        self.standardInput = channel.fileHandle
+        self.standardError = channel.fileHandle
+        self.standardOutput = channel.fileHandle
 
         self.terminationHandler = { _ in
             do {
                 logger.trace("Process terminated (executable: \(self.executableURL?.absoluteString ?? "UNK")")
-                try terminal.detachProcess(token: token)
+                try channel.disconnect()
             } catch let error {
                 logger.warning("Failed to detach process: \(error.localizedDescription)")
             }

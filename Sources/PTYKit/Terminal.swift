@@ -24,15 +24,36 @@ import Logging
 
 import CPTYKit
 
-private let logger = Logger(label: "ptykit.terminal")
+fileprivate let logger = Logger(label: "ptykit.terminal")
 
 public enum TerminalNewline {
     case `default`
     case ssh
 }
 
+public typealias TerminalListener = (String) -> Void
+
 public final class PseudoTerminal {
-    public typealias TerminalListener = (String) -> Void
+    public final class Channel {
+        public let fileHandle: FileHandle
+        public var fileDescriptor: Int32 { fileHandle.fileDescriptor }
+
+        private var token: Int?
+        private weak var terminal: PseudoTerminal?
+
+        fileprivate init(handle: FileHandle, terminal: PseudoTerminal, token: Int) {
+            self.fileHandle = handle
+            self.terminal = terminal
+            self.token = token
+        }
+
+        public func disconnect() throws {
+            guard let token = token else { return }
+
+            try self.terminal?.disconnect(token: token)
+            self.token = nil
+        }
+    }
 
     // PTY Handles
     // - Host is for reading/writing
@@ -63,13 +84,14 @@ public final class PseudoTerminal {
         hostHandle = try PseudoTerminal.openPTY(identifier: identifier)
         childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle, identifier: identifier)
 
-        hostHandle.readabilityHandler = { handle in
-            self.readReceivedData(fileHandle: handle)
+        hostHandle.readabilityHandler = { [weak self] handle in
+            self?.readReceivedData(fileHandle: handle)
         }
     }
 
     deinit {
         do {
+            hostHandle.readabilityHandler = nil
             try childHandle.close()
             try hostHandle.close()
         } catch let error {
@@ -77,7 +99,7 @@ public final class PseudoTerminal {
         }
     }
 
-    func attachProcess() throws -> Int {
+    public func connect() throws -> Channel {
         attachLock.lock()
         defer { attachLock.unlock() }
 
@@ -87,11 +109,10 @@ public final class PseudoTerminal {
 
         let token = Int.random(in: Int.min...Int.max)
         attachToken = token
-        logger.debug("Process attached")
-        return token
+        return Channel(handle: self.childHandle, terminal: self, token: token)
     }
 
-    func detachProcess(token: Int) throws {
+    func disconnect(token: Int) throws {
         attachLock.lock()
         defer { attachLock.unlock() }
 
@@ -118,13 +139,6 @@ public final class PseudoTerminal {
                 continuation.resume(returning: false)
             }
         })
-    }
-
-    private func isProcessAttached() -> Bool {
-        attachLock.lock()
-        defer { attachLock.unlock() }
-
-        return isAttached
     }
 
     private func addHandler(_ closure: @escaping () -> Void) -> Bool {
@@ -357,9 +371,7 @@ extension PseudoTerminal {
             return
         }
 
-        if currentExpects.count > 0 {
-            logger.trace("Processing \(currentExpects.count) Expects (\(identifier))")
-        }
+        logger.trace("Processing \(currentExpects.count) Expects (\(identifier))")
         for handler in currentExpects.values {
             handler(content)
         }
