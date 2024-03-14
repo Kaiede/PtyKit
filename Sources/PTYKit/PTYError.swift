@@ -48,6 +48,6 @@ extension PTYError: CustomStringConvertible {
     }
 }
 
-extension PTYError {
-    var localizedDescription: String { description }
+extension PTYError: LocalizedError {
+    var errorDescription: String? { description }
 }
