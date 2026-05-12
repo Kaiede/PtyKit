@@ -2,98 +2,84 @@ import XCTest
 @testable import PTYKit
 
 final class TerminalTests: XCTestCase {
-    func testBasicSend() {
+    func testBasicSend() async {
         do {
             let terminal = try PseudoTerminal()
 
-            try terminal.sendLine("Some Basic String")
+            try await terminal.sendLine("Some Basic String")
         } catch let error {
             XCTFail("\(error.localizedDescription)")
         }
     }
 
-    func testDefaultNewline() {
+    func testDefaultNewline() async {
         do {
             let terminal = try PseudoTerminal()
             let shellUrl = URL(fileURLWithPath: "/bin/cat")
-            let process = try Process(shellUrl, arguments: [], terminal: terminal)
+            let process = try await Process(shellUrl, arguments: [], terminal: terminal)
 
             try process.run()
 
             let expectation = expectation(description: "Should get results")
             expectation.expectedFulfillmentCount = 2 // both send and receive should show up
-            try terminal.sendLine("Hello World")
-            terminal.listen(for: ".*", handler: { line in
+            try await terminal.sendLine("Hello World")
+            await terminal.listen(for: ".*", handler: { line in
                 // The \n becomes a single \r\n via 'cat'
                 XCTAssertEqual(line, "Hello World\r\n")
                 expectation.fulfill()
             })
 
-            wait(for: [expectation], timeout: 0.1)
+            await fulfillment(of: [expectation], timeout: 0.1)
         } catch let error {
             XCTFail("\(error.localizedDescription)")
         }
     }
 
-    func testSshNewline() {
+    func testSshNewline() async {
         do {
             let terminal = try PseudoTerminal(newline: .ssh)
             let shellUrl = URL(fileURLWithPath: "/bin/cat")
-            let process = try Process(shellUrl, arguments: [], terminal: terminal)
+            let process = try await Process(shellUrl, arguments: [], terminal: terminal)
 
             try process.run()
 
             let expectation = expectation(description: "Should get results")
             expectation.expectedFulfillmentCount = 2 // both send and receive should show up
-            try terminal.sendLine("Hello World")
-            terminal.listen(for: ".*", handler: { line in
+            try await terminal.sendLine("Hello World")
+            await terminal.listen(for: ".*", handler: { line in
                 // The \r should still wind up being an \r\n
                 XCTAssertEqual(line, "Hello World\r\n")
                 expectation.fulfill()
             })
 
-            wait(for: [expectation], timeout: 0.1)
+            await fulfillment(of: [expectation], timeout: 0.1)
         } catch let error {
             XCTFail("\(error.localizedDescription)")
         }
     }
 
-    func testBasicReceive() {
-        let asyncExpect = expectation(description: "Task Completed")
-        Task {
-            do {
-                let terminal = try PseudoTerminal()
+    func testBasicReceive() async {
+        do {
+            let terminal = try PseudoTerminal()
 
-                let match = await terminal.expect("Basic Expectation", timeout: 0.1)
-                XCTAssertEqual(match, .noMatch)
-            } catch let error {
-                XCTFail("\(error.localizedDescription)")
-            }
-
-            asyncExpect.fulfill()
+            let match = await terminal.expect("Basic Expectation", timeout: 0.1)
+            XCTAssertEqual(match, .noMatch)
+        } catch let error {
+            XCTFail("\(error.localizedDescription)")
         }
-
-        waitForExpectations(timeout: 0.2)
     }
 
-    func testOpenManyTerminalsInSerial() {
-        let asyncExpect = expectation(description: "Task Completed")
-        Task {
-            do {
-                for _ in 0...128 {
-                    let terminal = try PseudoTerminal()
-                    
-                    let match = await terminal.expect("Basic Expectation", timeout: 0.01)
-                    XCTAssertEqual(match, .noMatch)
-                }
-            } catch let error {
-                XCTFail("\(error.localizedDescription)")
+    func testOpenManyTerminalsInSerial() async {
+        do {
+            for _ in 0...128 {
+                let terminal = try PseudoTerminal()
+                
+                let match = await terminal.expect("Basic Expectation", timeout: 0.01)
+                XCTAssertEqual(match, .noMatch)
             }
-
-            asyncExpect.fulfill()
+        } catch let error {
+            XCTFail("\(error.localizedDescription)")
         }
-
-        waitForExpectations(timeout: 5)
     }
 
     func testOpenManyTerminalsInParallel() {
@@ -102,51 +88,46 @@ final class TerminalTests: XCTestCase {
             let terminals = try array.map({ _ in
                 return try PseudoTerminal()
             })
+            XCTAssert(terminals.count == 129)
         } catch let error {
             XCTFail("\(error.localizedDescription)")
         }
     }
 
-    func testBasicShell() {
-        let asyncExpect = expectation(description: "Task Completed")
-        Task {
-            do {
-                let terminal = try PseudoTerminal()
-                let shellUrl = URL(fileURLWithPath: "/bin/sh")
-                let process = try Process(shellUrl, arguments: [], terminal: terminal)
+    func testBasicShell() async {
+        do {
+            let terminal = try PseudoTerminal()
+            let shellUrl = URL(fileURLWithPath: "/bin/sh")
+            let process = try await Process(shellUrl, arguments: [], terminal: terminal)
 
-                XCTAssertTrue(terminal.isAttached)
+            let isAttached = await terminal.isAttached
+            XCTAssertTrue(isAttached)
 
-                try process.run()
+            try process.run()
 
-                try terminal.sendLine("whoami")
-                let username = NSUserName()
+            try await terminal.sendLine("whoami")
+            let username = NSUserName()
 
-                let match1 = await terminal.expect(username, timeout: 0.5)
-                XCTAssertNotEqual(match1, .noMatch)
+            let match1 = await terminal.expect(username, timeout: 0.5)
+            XCTAssertNotEqual(match1, .noMatch)
 
-                process.terminate()
-            } catch let error {
-                XCTFail("\(error.localizedDescription)")
-            }
-            
-            asyncExpect.fulfill()
+            process.terminate()
+        } catch let error {
+            XCTFail("\(error.localizedDescription)")
         }
-
-        waitForExpectations(timeout: 5)
     }
 
-    func testWindowSize() throws {
+    func testWindowSize() async throws {
         let terminal = try PseudoTerminal()
 
         // Why is this 0x0 by default on Mac?
-        let size = try terminal.getWindowSize()
+        let size = try await terminal.getWindowSize()
         XCTAssertEqual(size.ws_col, 0)
         XCTAssertEqual(size.ws_row, 0)
 
         // Set some value and test that it fetches back
-        try terminal.setWindowSize(columns: 80, rows: 24)
-        let size2 = try terminal.getWindowSize()
+        try await terminal.setWindowSize(columns: 80, rows: 24)
+        let size2 = try await terminal.getWindowSize()
         XCTAssertEqual(size2.ws_col, 80)
         XCTAssertEqual(size2.ws_row, 24)
     }

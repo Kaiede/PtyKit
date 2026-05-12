@@ -25,23 +25,25 @@ import Logging
 private let logger = Logger(label: "ptykit.process")
 
 public extension Process {
-    convenience init(_ launchExecutable: URL, arguments: [String], terminal: PseudoTerminal) throws {
+    convenience init(_ launchExecutable: URL, arguments: [String], terminal: PseudoTerminal) async throws {
         self.init()
         self.executableURL = launchExecutable
         self.arguments = arguments
 
-        let channel = try terminal.connect()
+        let channel = try await terminal.connect()
 
         self.standardInput = channel.fileHandle
         self.standardError = channel.fileHandle
         self.standardOutput = channel.fileHandle
 
         self.terminationHandler = { _ in
-            do {
-                logger.trace("Process terminated (executable: \(self.executableURL?.absoluteString ?? "UNK")")
-                try channel.disconnect()
-            } catch let error {
-                logger.warning("Failed to detach process: \(error.localizedDescription)")
+            Task {
+                do {
+                    logger.trace("Process terminated (executable: \(self.executableURL?.absoluteString ?? "UNK")")
+                    try await channel.disconnect()
+                } catch let error {
+                    logger.warning("Failed to detach process: \(error.localizedDescription)")
+                }
             }
         }
     }

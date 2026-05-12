@@ -33,7 +33,7 @@ public enum TerminalNewline {
 
 public typealias TerminalListener = (String) -> Void
 
-public final class PseudoTerminal {
+public actor PseudoTerminal {
     public final class Channel {
         public let fileHandle: FileHandle
         public var fileDescriptor: Int32 { fileHandle.fileDescriptor }
@@ -47,10 +47,10 @@ public final class PseudoTerminal {
             self.token = token
         }
 
-        public func disconnect() throws {
+        public func disconnect() async throws {
             guard let token = token else { return }
 
-            try self.terminal?.disconnect(token: token)
+            try await self.terminal?.disconnect(token: token)
             self.token = nil
         }
     }
@@ -63,7 +63,6 @@ public final class PseudoTerminal {
 
     private let identifier: String
     private let newline: TerminalNewline
-    private let attachLock: NSRecursiveLock
     private var attachToken: Int?
     private var detachHandlers: [() -> Void]
 
@@ -77,7 +76,6 @@ public final class PseudoTerminal {
     public init(identifier: String = "Terminal", newline: TerminalNewline = .default) throws {
         self.identifier = identifier
         self.newline = newline
-        attachLock = NSRecursiveLock()
         detachHandlers = []
         currentExpects = [:]
         attachToken = nil
@@ -85,7 +83,10 @@ public final class PseudoTerminal {
         childHandle = try PseudoTerminal.getChildPTY(parent: hostHandle, identifier: identifier)
 
         hostHandle.readabilityHandler = { [weak self] handle in
-            self?.readReceivedData(fileHandle: handle)
+            guard let terminal = self else { return }
+            Task {
+                await terminal.readReceivedData(fileHandle: handle)
+            }
         }
     }
 
@@ -100,9 +101,6 @@ public final class PseudoTerminal {
     }
 
     public func connect() throws -> Channel {
-        attachLock.lock()
-        defer { attachLock.unlock() }
-
         guard !isAttached else {
             throw PTYError.alreadyAttached
         }
@@ -113,9 +111,6 @@ public final class PseudoTerminal {
     }
 
     func disconnect(token: Int) throws {
-        attachLock.lock()
-        defer { attachLock.unlock() }
-
         guard isAttached && attachToken == token else {
             throw PTYError.notAttached
         }
@@ -142,9 +137,6 @@ public final class PseudoTerminal {
     }
 
     private func addHandler(_ closure: @escaping () -> Void) -> Bool {
-        attachLock.lock()
-        defer { attachLock.unlock() }
-
         if !isAttached {
             return false
         }
@@ -270,7 +262,7 @@ extension PseudoTerminal {
 
     public func listen(for expressions: [String], handler: @escaping TerminalListener) {
         self.currentListener = { content in
-            if let foundMatch = self.findMatches(content: content, expressions: expressions) {
+            if self.findMatches(content: content, expressions: expressions) != nil {
                 logger.trace("Match found, calling listener (\(self.identifier))")
                 handler(content)
             } else {
@@ -278,7 +270,7 @@ extension PseudoTerminal {
             }
         }
     }
-
+    
     public func stopListening() {
         self.currentListener = nil
     }
@@ -317,13 +309,15 @@ extension PseudoTerminal {
             currentExpects.removeValue(forKey: continuationId)
         }
     }
-
+    
     private func pipeEvents(timeout: TimeInterval = .infinity, id: UUID) -> AsyncStream<String> {
         AsyncStream { continuation in
             let continuationId = id.uuidString
 
             continuation.onTermination = { @Sendable _ in
-                self.cancelPipe(id: id)
+                Task {
+                    await self.cancelPipe(id: id)
+                }
             }
 
             logger.trace("Adding Expectation \(continuationId) (\(identifier))")
@@ -333,9 +327,9 @@ extension PseudoTerminal {
 
             if timeout != .infinity {
                 logger.debug("Timeout for Expectation is \(timeout) s (\(identifier))")
-                let deadline = Date().advanced(by: timeout)
-                let wallDeadline = DispatchWallTime(date: deadline)
-                DispatchQueue.global().asyncAfter(wallDeadline: wallDeadline) {
+                Task {
+                    try await Task.sleep(until: .now.advanced(by: .seconds(timeout)))
+                    
                     if self.currentExpects[continuationId] != nil {
                         logger.debug("Timeout Reached for \(continuationId)")
                         continuation.finish()
