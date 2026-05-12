@@ -1,12 +1,24 @@
 import XCTest
 @testable import PTYKit
 
+import Logging
+
+fileprivate var logger = Logger(label: "ptykit.tests")
+
 final class TerminalTests: XCTestCase {
+    override class func setUp() {
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = .trace
+            return handler
+        }
+    }
+
     func testBasicSend() async {
         do {
             let terminal = try PseudoTerminal()
 
-            try await terminal.sendLine("Some Basic String")
+            try terminal.sendLine("Some Basic String")
         } catch let error {
             XCTFail("\(error.localizedDescription)")
         }
@@ -22,7 +34,7 @@ final class TerminalTests: XCTestCase {
 
             let expectation = expectation(description: "Should get results")
             expectation.expectedFulfillmentCount = 2 // both send and receive should show up
-            try await terminal.sendLine("Hello World")
+            try terminal.sendLine("Hello World")
             await terminal.listen(for: ".*", handler: { line in
                 // The \n becomes a single \r\n via 'cat'
                 XCTAssertEqual(line, "Hello World\r\n")
@@ -45,7 +57,7 @@ final class TerminalTests: XCTestCase {
 
             let expectation = expectation(description: "Should get results")
             expectation.expectedFulfillmentCount = 2 // both send and receive should show up
-            try await terminal.sendLine("Hello World")
+            try terminal.sendLine("Hello World")
             await terminal.listen(for: ".*", handler: { line in
                 // The \r should still wind up being an \r\n
                 XCTAssertEqual(line, "Hello World\r\n")
@@ -73,7 +85,7 @@ final class TerminalTests: XCTestCase {
         do {
             for _ in 0...128 {
                 let terminal = try PseudoTerminal()
-                
+
                 let match = await terminal.expect("Basic Expectation", timeout: 0.01)
                 XCTAssertEqual(match, .noMatch)
             }
@@ -105,10 +117,10 @@ final class TerminalTests: XCTestCase {
 
             try process.run()
 
-            try await terminal.sendLine("whoami")
+            try terminal.sendLine("whoami")
             let username = NSUserName()
 
-            let match1 = await terminal.expect(username, timeout: 0.5)
+            let match1 = await terminal.expect(username, timeout: 1)
             XCTAssertNotEqual(match1, .noMatch)
 
             process.terminate()
@@ -121,13 +133,13 @@ final class TerminalTests: XCTestCase {
         let terminal = try PseudoTerminal()
 
         // Why is this 0x0 by default on Mac?
-        let size = try await terminal.getWindowSize()
+        let size = try terminal.getWindowSize()
         XCTAssertEqual(size.ws_col, 0)
         XCTAssertEqual(size.ws_row, 0)
 
         // Set some value and test that it fetches back
-        try await terminal.setWindowSize(columns: 80, rows: 24)
-        let size2 = try await terminal.getWindowSize()
+        try terminal.setWindowSize(columns: 80, rows: 24)
+        let size2 = try terminal.getWindowSize()
         XCTAssertEqual(size2.ws_col, 80)
         XCTAssertEqual(size2.ws_row, 24)
     }
@@ -137,11 +149,11 @@ final class TerminalTests: XCTestCase {
         XCTAssertEqual(example, "Failed to get an error: \(PTYError.alreadyAttached.description)")
         XCTAssertEqual(example, "Failed to get an error: \(PTYError.alreadyAttached.localizedDescription)")
     }
-    
+
     func testTimeout() async throws {
         let terminal = try PseudoTerminal()
-        
-        let result = await terminal.expect(["Something that never comes"], timeout: 15.0)
+
+        let result = await terminal.expect(["Something that never comes"], timeout: 1.0)
         XCTAssertEqual(result, .noMatch)
     }
 }

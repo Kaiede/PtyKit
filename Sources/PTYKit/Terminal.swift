@@ -62,7 +62,7 @@ public actor PseudoTerminal {
     let childHandle: FileHandle
 
     private let identifier: String
-    private let newline: TerminalNewline
+    nonisolated private let newline: TerminalNewline
     private var attachToken: Int?
     private var detachHandlers: [() -> Void]
 
@@ -84,9 +84,7 @@ public actor PseudoTerminal {
 
         hostHandle.readabilityHandler = { [weak self] handle in
             guard let terminal = self else { return }
-            Task {
-                await terminal.readReceivedData(fileHandle: handle)
-            }
+            terminal.readReceivedData(fileHandle: handle)
         }
     }
 
@@ -183,6 +181,7 @@ public actor PseudoTerminal {
 // MARK: Window Size
 
 extension PseudoTerminal {
+    nonisolated
     public func setWindowSize(columns: UInt16, rows: UInt16) throws {
         var size = winsize(ws_row: rows, ws_col: columns, ws_xpixel: 0, ws_ypixel: 0)
 
@@ -204,6 +203,7 @@ extension PseudoTerminal {
 
     }
 
+    nonisolated
     public func getWindowSize() throws -> winsize {
         var size = winsize()
         let result = ioctl(childHandle.fileDescriptor, UInt(TIOCGWINSZ), &size)
@@ -219,6 +219,7 @@ extension PseudoTerminal {
 // MARK: Writing
 
 extension PseudoTerminal {
+    nonisolated
     public func sendLine(_ content: String) throws {
         switch newline {
         case .default: try send("\(content)\n")
@@ -226,22 +227,25 @@ extension PseudoTerminal {
         }
     }
 
+    nonisolated
     public func send(_ content: String) throws {
         guard let data = content.data(using: .utf8) else {
             logger.error("Failed to get UTF8 data for content: \(content) (\(identifier))")
             throw PTYError.invalidData
         }
 
-        logger.trace("Sending: \(content) (\(identifier))")
+        logger.trace("Sending: \(content.debugDescription) (\(identifier))")
         hostHandle.write(data)
     }
 
+    nonisolated
     public func send(_ data: Data) {
         logger.trace("Sending Data: \(data.count) bytes (\(identifier))")
         hostHandle.write(data)
     }
 
     @available(OSX 10.15.4, *)
+    nonisolated
     public func send<Data: DataProtocol>(contentsOf data: Data) throws {
         logger.trace("Sending Data: \(data.count) bytes (\(identifier))")
         try hostHandle.write(contentsOf: data)
@@ -266,11 +270,11 @@ extension PseudoTerminal {
                 logger.trace("Match found, calling listener (\(self.identifier))")
                 handler(content)
             } else {
-                logger.trace("No match found for content: \(content) (\(self.identifier))")
+                logger.trace("No match found for content: \(content.debugDescription) (\(self.identifier))")
             }
         }
     }
-    
+
     public func stopListening() {
         self.currentListener = nil
     }
@@ -289,7 +293,7 @@ extension PseudoTerminal {
         defer { cancelPipe(id: pipeId) }
 
         for await content in pipeEvents(timeout: timeout, id: pipeId) {
-            logger.debug("Content Read: \(content) (\(identifier))")
+            logger.debug("Content Read: \(content.debugDescription) (\(identifier))")
             if let foundMatch = self.findMatches(content: content, expressions: expressions) {
                 logger.debug("Match Found: \(content) (\(identifier))")
                 return .match(foundMatch)
@@ -309,7 +313,7 @@ extension PseudoTerminal {
             currentExpects.removeValue(forKey: continuationId)
         }
     }
-    
+
     private func pipeEvents(timeout: TimeInterval = .infinity, id: UUID) -> AsyncStream<String> {
         AsyncStream { continuation in
             let continuationId = id.uuidString
@@ -329,7 +333,7 @@ extension PseudoTerminal {
                 logger.debug("Timeout for Expectation is \(timeout) s (\(identifier))")
                 Task.detached {
                     try await Task.sleep(until: .now.advanced(by: .seconds(timeout)))
-                    
+
                     logger.debug("Timeout Reached for \(continuationId)")
                     continuation.finish()
                 }
@@ -348,9 +352,10 @@ extension PseudoTerminal {
         return nil
     }
 
+    nonisolated
     private func readReceivedData(fileHandle: FileHandle) {
-        logger.trace("Data Received on file descriptor (\(identifier) - \(fileHandle.fileDescriptor))")
         let data = fileHandle.availableData
+        logger.trace("\(data.count) bytes received on file descriptor (\(identifier) - \(fileHandle.fileDescriptor))")
 
         // Handle EOF State
         guard data.count > 0 else {
@@ -363,15 +368,17 @@ extension PseudoTerminal {
             return
         }
 
-        logger.trace("Processing \(currentExpects.count) Expects (\(identifier))")
-        for handler in currentExpects.values {
-            handler(content)
-        }
+        Task {
+            let currentExpects = await self.currentExpects
+            logger.trace("Processing \(currentExpects.count) Expects (\(identifier))")
+            for handler in currentExpects.values {
+                handler(content)
+            }
 
-        if let handler = currentListener {
-            logger.trace("Processing Listener (\(identifier))")
-            handler(content)
+            if let handler = await currentListener {
+                logger.trace("Processing Listener (\(identifier))")
+                handler(content)
+            }
         }
     }
 }
-
