@@ -137,4 +137,11 @@ final class TerminalTests: XCTestCase {
         XCTAssertEqual(example, "Failed to get an error: \(PTYError.alreadyAttached.description)")
         XCTAssertEqual(example, "Failed to get an error: \(PTYError.alreadyAttached.localizedDescription)")
     }
+    
+    func testTimeout() async throws {
+        let terminal = try PseudoTerminal()
+        
+        let result = await terminal.expect(["Something that never comes"], timeout: 15.0)
+        XCTAssertEqual(result, .noMatch)
+    }
 }
