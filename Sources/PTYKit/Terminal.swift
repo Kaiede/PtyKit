@@ -326,6 +326,7 @@ extension PseudoTerminal {
 
             logger.trace("Adding Expectation \(continuationId) (\(identifier))")
             self.currentExpects[continuationId] = { content in
+                logger.trace("Expect Called")
                 continuation.yield(content)
             }
 
