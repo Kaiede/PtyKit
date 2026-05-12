@@ -331,9 +331,7 @@ extension PseudoTerminal {
                     try await Task.sleep(until: .now.advanced(by: .seconds(timeout)))
                     
                     logger.debug("Timeout Reached for \(continuationId)")
-                    if await self.currentExpects[continuationId] != nil {
-                        continuation.finish()
-                    }
+                    continuation.finish()
                 }
             }
         }
